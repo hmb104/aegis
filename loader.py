@@ -9,9 +9,8 @@ import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 class LogLoader:
-    def __init__(self, clean_dir, state_file, log_file, es_host, es_index_prefix, logger):
+    def __init__(self, clean_dir, log_file, es_host, es_index_prefix, logger):
         self.clean_dir = clean_dir
-        self.state_file = state_file
         self.log_file = log_file
         self.es = Elasticsearch(
             es_host,
@@ -20,18 +19,6 @@ class LogLoader:
         )
         self.es_index_prefix = es_index_prefix
         self.logger = logger
-        self.processed_files = self._load_state()
-
-    def _load_state(self):
-        if os.path.exists(self.state_file):
-            with open(self.state_file, 'r') as f:
-                return set(line.strip() for line in f)
-        return set()
-
-    def _save_state(self):
-        with open(self.state_file, 'w') as f:
-            for file in self.processed_files:
-                f.write(f"{file}\n")
 
     def _check_es_connection(self):
         try:
@@ -46,11 +33,12 @@ class LogLoader:
 
         total_files = 0
         total_entries = 0
+        skipped_files = 0
 
         for root, _, files in os.walk(self.clean_dir):
             for file_name in files:
                 file_path = os.path.join(root, file_name)
-                if file_path not in self.processed_files:
+                if os.path.getsize(file_path) > 0:  # Exclude empty files
                     try:
                         with open(file_path, 'r') as f:
                             entries = [json.loads(line) for line in f if line.strip()]
@@ -59,13 +47,14 @@ class LogLoader:
                                 success, failed = self._bulk_insert(entries, log_type)
                                 total_files += 1
                                 total_entries += success
-                                self.processed_files.add(file_path)
                                 self.logger.info(f"Processed {file_path} with {success} entries. Failed: {failed}")
                     except Exception as e:
                         self.logger.error(f"Error processing {file_path}: {e}")
+                        skipped_files += 1
+                else:
+                    skipped_files += 1
 
-        self._save_state()
-        self._write_log(total_files, total_entries)
+        self._write_log(total_files, total_entries, skipped_files)
         self.logger.info("Log loading process completed.")
 
     def _determine_log_type(self, file_name):
@@ -98,7 +87,7 @@ class LogLoader:
         index_name = f"{self.es_index_prefix}_{log_type}"
         actions = [
             {
-                "_index": index_name,
+                "_index": index_name.lower(),  # Ensure the index name is lowercase
                 "_source": entry
             }
             for entry in entries
@@ -113,11 +102,12 @@ class LogLoader:
                 self.logger.error(f"Failed document: {error}")
             return len(actions) - failed_docs, failed_docs
 
-    def _write_log(self, total_files, total_entries):
+    def _write_log(self, total_files, total_entries, skipped_files):
         with open(self.log_file, 'a') as log:
             log.write(f"Log Loading Summary - {datetime.now()}\n")
             log.write(f"Total files processed: {total_files}\n")
             log.write(f"Total log entries inserted: {total_entries}\n")
+            log.write(f"Total files skipped: {skipped_files}\n")
             log.write("----\n")
 
 if __name__ == "__main__":
@@ -125,7 +115,6 @@ if __name__ == "__main__":
     logger = logging.getLogger('LogLoader')
 
     clean_directory = 'clean'
-    state_file_path = 'processed_files.txt'
     log_file_path = 'loading_log.txt'
     es_host = 'https://localhost:9200'
     es_index_prefix = 'logs'
@@ -133,7 +122,7 @@ if __name__ == "__main__":
     logger.info("Starting the log loading process...")
 
     try:
-        loader = LogLoader(clean_directory, state_file_path, log_file_path, es_host, es_index_prefix, logger)
+        loader = LogLoader(clean_directory, log_file_path, es_host, es_index_prefix, logger)
         loader.load_logs()
     except Exception as e:
         logger.error(f"Failed to start LogLoader: {e}")
