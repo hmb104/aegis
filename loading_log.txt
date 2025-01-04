@@ -1,9 +1,0 @@
-Log Loading Summary - 2024-06-28 17:40:57.799174
-Total files processed: 23
-Total log entries inserted: 1663
-----
-Log Loading Summary - 2024-06-28 17:43:27.285422
-Total files processed: 23
-Total log entries inserted: 1852
-Total files skipped: 21
-----
