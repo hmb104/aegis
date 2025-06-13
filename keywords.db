@@ -1,35 +1,69 @@
-# Initial keyword list
+# Updated keyword list based on SLIM document security-relevant entries
 KEYWORDS = [
+    # General security indicators
     "unauthorized",
+    "access denied",
     "authentication failed",
     "login failed",
     "invalid login",
-    "access denied",
-    "root access",
-    "elevation",
     "privilege escalation",
-    "malware",
-    "attack",
-    "virus",
-    "threat",
-    "intrusion",
-    "breach",
-    "security alert",
-    "tamper",
-    "modification",
-    "log cleared",
-    "config change",
-    "admin access",
-    "blacklist",
-    "whitelist change",
-    "firewall",
-    "IDS alert",
-    "encryption error",
-    "certificate failure",
-    "key mismatch",
-    "command injection",
-    "shell execution",
+    "root access",
     "sudo",
-    "remote access",
-    "vpn"
+    "session opened for user root",
+
+    # Malware and virus detection
+    "malware",
+    "virus",
+    "NOK",
+    "virus found",
+    "eicar",
+    "checksum check KO",
+
+    # Intrusion and tampering
+    "intrusion",
+    "tamper",
+    "PING detected from non-homenet",
+    "KO_MISSING_MANIFEST_FILE",
+    "KO_CONTENT_HAS_BEEN_TAMPERED_WITH",
+    "Integrity check error",
+
+    # Firewall and network anomalies
+    "firewall",
+    "DROP",
+    "network intrusion",
+    "ICMP",
+    "IP Removed from Whitelist",
+
+    # AWS and cloud errors
+    "Failed to decrypt AWS Credentials",
+    "AWS message signature verification failure",
+    "Unable to execute HTTP request",
+
+    # Content verification and software updates
+    "Signature file verification failure",
+    "Authentication of PN",
+    "MD5 mismatch",
+    "Public KEY missing",
+    "Security Package cannot be authenticated",
+
+    # System services monitoring
+    "rsyslogd: exiting",
+    "rsyslogd: start",
+    "exiting on signal",
+
+    # Role-Based Access Control logs
+    "avc:  denied",
+    "audit",
+    "selinux",
+    "RBAC",
+
+    # Bluetooth and USB anomalies
+    "BluetoothDevice",
+    "USB-content",
+    "SDXC-content",
+
+    # Critical log markers
+    "[CRITICAL]",
+    "[FAILURE]",
+    "[ERROR]"
 ]
