@@ -1,130 +1,50 @@
 import os
-import json
+from pathlib import Path
 import logging
-from datetime import datetime
-from elasticsearch import Elasticsearch, helpers, exceptions
-import urllib3
 
-# Suppress insecure request warnings
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+# Constants
+CLEAN_LOGS_DIR = Path("cleanlogs")
+KEYWORDS_FILE = Path("keywords.db")
+OUTPUT_FILE = Path("search_results.txt")
 
-class LogLoader:
-    def __init__(self, clean_dir, log_file, es_host, es_index_prefix, logger):
-        self.clean_dir = clean_dir
-        self.log_file = log_file
-        self.es = Elasticsearch(
-            es_host,
-            basic_auth=(os.getenv('ES_USER'), os.getenv('ES_PASS')),
-            verify_certs=False
-        )
-        self.es_index_prefix = es_index_prefix
-        self.logger = logger
+# Setup logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.StreamHandler()
+    ]
+)
 
-    def _check_es_connection(self):
+def load_keywords():
+    if not KEYWORDS_FILE.exists():
+        logging.error("keywords.db not found. Please provide one.")
+        return []
+    with open(KEYWORDS_FILE, "r") as f:
+        return [line.strip().lower() for line in f if line.strip() and not line.startswith("#")]
+
+def search_logs(keywords):
+    matches = []
+    for log_file in CLEAN_LOGS_DIR.glob("*.log"):
         try:
-            if not self.es.ping():
-                raise exceptions.ConnectionError("Elasticsearch cluster is not reachable")
-        except exceptions.ConnectionError as e:
-            self.logger.error(f"Elasticsearch connection failed: {e}")
-            raise
+            with open(log_file, "r", errors="ignore") as f:
+                for i, line in enumerate(f, start=1):
+                    lower_line = line.lower()
+                    if any(keyword in lower_line for keyword in keywords):
+                        match = f"{log_file.name} [Line {i}]: {line.strip()}"
+                        matches.append(match)
+        except Exception as e:
+            logging.warning(f"Could not read {log_file.name}: {e}")
 
-    def load_logs(self):
-        self._check_es_connection()
-
-        total_files = 0
-        total_entries = 0
-        skipped_files = 0
-
-        for root, _, files in os.walk(self.clean_dir):
-            for file_name in files:
-                file_path = os.path.join(root, file_name)
-                if os.path.getsize(file_path) > 0:  # Exclude empty files
-                    try:
-                        with open(file_path, 'r') as f:
-                            entries = [json.loads(line) for line in f if line.strip()]
-                            if entries:
-                                log_type = self._determine_log_type(file_name)
-                                success, failed = self._bulk_insert(entries, log_type)
-                                total_files += 1
-                                total_entries += success
-                                self.logger.info(f"Processed {file_path} with {success} entries. Failed: {failed}")
-                    except Exception as e:
-                        self.logger.error(f"Error processing {file_path}: {e}")
-                        skipped_files += 1
-                else:
-                    skipped_files += 1
-
-        self._write_log(total_files, total_entries, skipped_files)
-        self.logger.info("Log loading process completed.")
-
-    def _determine_log_type(self, file_name):
-        # Determine the log type based on the file name
-        if 'alert' in file_name:
-            return 'alert'
-        elif 'audit' in file_name:
-            return 'audit'
-        elif 'firewall' in file_name:
-            return 'firewall'
-        elif 'cls_tool' in file_name:
-            return 'cls_tool'
-        elif 'clientsSecurityLogs' in file_name:
-            return 'clientsSecurityLogs'
-        elif 'CLSSecurity' in file_name:
-            return 'cls_security'
-        elif 'AWSEvents' in file_name:
-            return 'aws_events'
-        elif 'SecLog_AV_01' in file_name:
-            return 'seclog_av_01'
-        elif 'SecureSwDownload' in file_name:
-            return 'secure_sw_download'
-        elif 'SwCorruptionCheck' in file_name:
-            return 'sw_corruption_check'
-        # Add more elif blocks as needed for other log types
-        else:
-            return 'generic'
-
-    def _bulk_insert(self, entries, log_type):
-        index_name = f"{self.es_index_prefix}_{log_type}"
-        actions = [
-            {
-                "_index": index_name.lower(),  # Ensure the index name is lowercase
-                "_source": entry
-            }
-            for entry in entries
-        ]
-        try:
-            helpers.bulk(self.es, actions)
-            return len(actions), 0
-        except helpers.BulkIndexError as e:
-            failed_docs = len(e.errors)
-            self.logger.error(f"{failed_docs} document(s) failed to index.")
-            for error in e.errors:
-                self.logger.error(f"Failed document: {error}")
-            return len(actions) - failed_docs, failed_docs
-
-    def _write_log(self, total_files, total_entries, skipped_files):
-        with open(self.log_file, 'a') as log:
-            log.write(f"Log Loading Summary - {datetime.now()}\n")
-            log.write(f"Total files processed: {total_files}\n")
-            log.write(f"Total log entries inserted: {total_entries}\n")
-            log.write(f"Total files skipped: {skipped_files}\n")
-            log.write("----\n")
+    if matches:
+        with open(OUTPUT_FILE, "w") as out:
+            for match in matches:
+                out.write(match + "\n")
+        logging.info(f"Search complete. {len(matches)} matches written to {OUTPUT_FILE}")
+    else:
+        logging.info("No matches found.")
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    logger = logging.getLogger('LogLoader')
-
-    clean_directory = 'clean'
-    log_file_path = 'loading_log.txt'
-    es_host = 'https://localhost:9200'
-    es_index_prefix = 'logs'
-
-    logger.info("Starting the log loading process...")
-
-    try:
-        loader = LogLoader(clean_directory, log_file_path, es_host, es_index_prefix, logger)
-        loader.load_logs()
-    except Exception as e:
-        logger.error(f"Failed to start LogLoader: {e}")
-
-    logger.info("Log loading process completed.")
+    keywords = load_keywords()
+    if keywords:
+        search_logs(keywords)
