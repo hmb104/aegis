@@ -1,11 +1,10 @@
-import os
 import re
 import time
 import logging
 from tqdm import tqdm
 from pathlib import Path
 from datetime import datetime
-from collections import Counter, defaultdict
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Directories
@@ -78,14 +77,14 @@ def search_file(log_file, keywords):
                             f"Tail: {info['tail']}\n"
                             f"Flight: {info['flight']}\n"
                             f"Line {line_number}: {line.rstrip()}\n"
-                            "=========="
+                            "================================"
                         )
                         results.append(result_text)
     except Exception as e:
         results.append(f"Could not read file {log_file.name}: {e}")
     return log_file.name, results
 
-def analytics(total_files, total_matches, airline_counter, elapsed):
+def analytics(total_files, total_matches, airline_counter, elapsed, keyword_counter):
     logging.info(f"Completed search of {total_files} log files in {elapsed:.2f} seconds.")
     logging.info(f"Total matches found: {total_matches}")
     if airline_counter:
@@ -95,6 +94,13 @@ def analytics(total_files, total_matches, airline_counter, elapsed):
             logging.info(f"  {airline}: {count} matches")
     else:
         logging.info("No airline matches found.")
+    if keyword_counter:
+        top_keywords = keyword_counter.most_common(5)
+        logging.info("Top keywords with matches:")
+        for keyword, count in top_keywords:
+            logging.info(f"  {keyword}: {count} matches")
+    else:
+        logging.info("No keyword matches found.")
 
 def search_logs():
     keywords = load_keywords()
@@ -109,6 +115,7 @@ def search_logs():
 
     start_time = time.time()
     airline_counter = Counter()
+    keyword_counter = Counter()
     total_matches = 0
 
     with ThreadPoolExecutor() as executor:
@@ -117,19 +124,21 @@ def search_logs():
             log_file_name, matches = future.result()
             logging.info(f"Searching file: {log_file_name}")
             if matches:
-                for m in matches:
-                    logging.info("\n" + m)
-                # Parse airline for each match and increment counters
                 info = parse_log_filename(log_file_name)
                 airline = info["airline"]
+                airline_hits = 0
+                for keyword, m in matches:
+                    logging.info("\n" + m)
+                    keyword_counter[keyword] += 1
+                    airline_hits += 1
                 if airline != "UNKNOWN":
-                    airline_counter[airline] += len(matches)
-                total_matches += len(matches)
+                    airline_counter[airline] += airline_hits
+                total_matches += airline_hits
             else:
                 logging.info(f"No matches found in {log_file_name}")
 
     elapsed = time.time() - start_time
-    analytics(len(log_files), total_matches, airline_counter, elapsed)
+    analytics(len(log_files), total_matches, airline_counter, elapsed, keyword_counter)
     print("Search is Complete!")
 
 if __name__ == "__main__":
