@@ -7,11 +7,11 @@ from datetime import datetime
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-# Directories
+# Setup log directories
 CLEAN_LOGS_DIR = Path("cleanlogs")
 KEYWORDS_FILE = Path("keywords.file")
 
-# Timestamped log file
+# Generate timestamped log file
 timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
 LOG_FILE = Path(__file__).parent / f"search_{timestamp_str}.log"
 
@@ -23,7 +23,7 @@ logging.basicConfig(
     ]
 )
 
-# log errors to console
+# Log errors to console
 console = logging.StreamHandler()
 console.setLevel(logging.ERROR)
 formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
@@ -79,9 +79,9 @@ def search_file(log_file, keywords):
                             f"Line {line_number}: {line.rstrip()}\n"
                             "================================"
                         )
-                        results.append(result_text)
+                        results.append((keyword, result_text))
     except Exception as e:
-        results.append(f"Could not read file {log_file.name}: {e}")
+        results.append(("ERROR", f"Could not read file {log_file.name}: {e}"))
     return log_file.name, results
 
 def analytics(total_files, total_matches, airline_counter, elapsed, keyword_counter):
