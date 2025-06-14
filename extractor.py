@@ -1,14 +1,14 @@
+import re
 import tarfile
-from pathlib import Path
 import shutil
 import logging
-import re
+from pathlib import Path
 from datetime import datetime
 
 # Setup paths
 RAW_LOGS_DIR = Path("rawlogs")
 CLEAN_LOGS_DIR = Path("cleanlogs")
-TEMP_DIR = Path("temp_workspace")
+TEMP_DIR = Path("tmp")
 
 # Setup log files
 timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
