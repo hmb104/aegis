@@ -30,8 +30,12 @@ def load_keywords():
         return [line.strip() for line in f if line.strip() and not line.strip().startswith("#")]
 
 def parse_log_filename(filename):
-    # Expecting logtype_TIMESTAMP_AIRLINE_TAIL_FLIGHT.log
-    match = re.match(r"([A-Za-z0-9]+)_(\d{8}T\d{6})_([A-Z0-9]{3})_([A-Z0-9-]+)_([A-Z0-9]+)\.log", filename, re.IGNORECASE)
+    # Supports audit.log_20220330222001_QTR_A7-ANK_QR713.log and similar
+    match = re.match(
+        r"([A-Za-z0-9\.]+)_(\d{14})_([A-Z0-9]{3})_([A-Z0-9-]+)_([A-Z0-9]+)\.log",
+        filename,
+        re.IGNORECASE
+    )
     if match:
         logtype, dt, airline, tail, flight = match.groups()
         return {
