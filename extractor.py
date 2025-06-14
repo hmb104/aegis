@@ -2,36 +2,63 @@ import tarfile
 from pathlib import Path
 import shutil
 import logging
+import re
+from datetime import datetime
 
 # Setup paths
 RAW_LOGS_DIR = Path("rawlogs")
 CLEAN_LOGS_DIR = Path("cleanlogs")
 TEMP_DIR = Path("temp_workspace")
-LOG_FILE = Path(__file__).parent / "extractor.log"
+
+# Setup log files
+timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+LOG_FILE = Path(__file__).parent / f"extractor_{timestamp_str}.log"
 
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[
-        logging.FileHandler(LOG_FILE),
+        logging.FileHandler(LOG_FILE, mode='w'),
         logging.StreamHandler()
     ]
 )
 
-def extract_inner_tgz(from_path: Path, dest_dir: Path, prefix: str):
-    try:
-        for member in from_path.rglob("*.tgz"):
-            extracted_name = f"{prefix}__{member.name}"
-            output_path = dest_dir / extracted_name
-            shutil.copyfile(member, output_path)
-            logging.info(f"Extracted inner tgz: {output_path.name}")
-    except Exception as e:
-        logging.warning(f"Could not extract inner tgz from {from_path.name}: {e}")
+def parse_filename(filename: str):
+    match = re.match(r"SECURELOGS_(\d{14})_([A-Z0-9]{3})_([A-Z0-9-]+)_([A-Z0-9]+)\.tgz", filename, re.IGNORECASE)
+    if match:
+        return match.groups()
+    logging.warning(f"Filename format did not match expected pattern: {filename}")
+    return None, None, None, None
+
+def extract_inner_logs(base_path: Path, dest_dir: Path, timestamp: str, airline: str, tail: str, flight: str):
+    count = 0
+    for inner_tgz_file in base_path.rglob("*.tgz"):
+        try:
+            with tarfile.open(inner_tgz_file, "r:gz") as archive:
+                for member in archive.getmembers():
+                    if member.isfile():
+                        extracted_file = archive.extractfile(member)
+                        if extracted_file:
+                            log_type = Path(member.name).stem
+                            unique_name = f"{log_type}_{timestamp}_{airline}_{tail}_{flight}.log"
+                            output_path = dest_dir / unique_name
+                            with open(output_path, "wb") as f:
+                                shutil.copyfileobj(extracted_file, f)
+                            logging.info(f"Saved log: {output_path.name}")
+                            count += 1
+        except Exception as e:
+            logging.warning(f"Failed to extract inner tgz {inner_tgz_file.name}: {e}")
+    if count == 0:
+        logging.warning(f"No inner tgz logs found under {base_path}")
 
 def extract_tgz_file(tgz_file: Path):
-    prefix = tgz_file.stem  # SECURELOGS_...
-    tmp_path = TEMP_DIR / prefix
+    timestamp, airline, tail, flight = parse_filename(tgz_file.name)
+    if not all([timestamp, airline, tail, flight]):
+        logging.warning(f"Filename format not recognized: {tgz_file.name}")
+        return
+
+    tmp_path = TEMP_DIR / tgz_file.stem
 
     try:
         if tmp_path.exists():
@@ -39,23 +66,24 @@ def extract_tgz_file(tgz_file: Path):
         tmp_path.mkdir(parents=True)
 
         with tarfile.open(tgz_file, "r:gz") as outer:
-            outer.extractall(tmno, p_path)
+            outer.extractall(tmp_path)
 
-        tar_files = list(tmp_path.glob("*.tar"))
+        tar_files = list(tmp_path.rglob("*.tar"))
         if tar_files:
             for tar_file in tar_files:
-                extract_path = tmp_path / "inner"
+                inner_dir = tar_file.parent / (tar_file.stem + "_untarred")
+                inner_dir.mkdir(exist_ok=True)
                 with tarfile.open(tar_file, "r") as inner_tar:
-                    inner_tar.extractall(extract_path)
-                extract_inner_tgz(extract_path, CLEAN_LOGS_DIR, prefix)
+                    inner_tar.extractall(inner_dir)
+                extract_inner_logs(inner_dir, CLEAN_LOGS_DIR, timestamp, airline, tail, flight)
         else:
-            dot_dir = tmp_path / "."
-            if dot_dir.exists():
-                extract_inner_tgz(dot_dir, CLEAN_LOGS_DIR, prefix)
-            else:
-                extract_inner_tgz(tmp_path, CLEAN_LOGS_DIR, prefix)
+            extract_inner_logs(tmp_path, CLEAN_LOGS_DIR, timestamp, airline, tail, flight)
+
     except Exception as e:
         logging.warning(f"Failed to process {tgz_file.name}: {e}")
+    finally:
+        if tmp_path.exists():
+            shutil.rmtree(tmp_path, ignore_errors=True)
 
 def main():
     CLEAN_LOGS_DIR.mkdir(exist_ok=True)
@@ -68,6 +96,13 @@ def main():
     for tgz_file in tgz_files:
         logging.info(f"Processing: {tgz_file.relative_to(RAW_LOGS_DIR)}")
         extract_tgz_file(tgz_file)
+
+    # Final clean-up
+    try:
+        shutil.rmtree(TEMP_DIR)
+        logging.info(f"Fully cleaned up temp folder: {TEMP_DIR}")
+    except Exception as cleanup_error:
+        logging.warning(f"Could not clean up temp folder {TEMP_DIR}: {cleanup_error}")
 
 if __name__ == "__main__":
     main()
