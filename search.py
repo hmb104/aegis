@@ -2,6 +2,7 @@ import os
 import re
 import time
 import logging
+from tqdm import tqdm
 from pathlib import Path
 from datetime import datetime
 from collections import Counter, defaultdict
@@ -19,10 +20,16 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[
-        logging.FileHandler(LOG_FILE, mode='w'),
-        logging.StreamHandler()
+        logging.FileHandler(LOG_FILE, mode='w')
     ]
 )
+
+# log errors to console
+console = logging.StreamHandler()
+console.setLevel(logging.ERROR)
+formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+console.setFormatter(formatter)
+logging.getLogger().addHandler(console)
 
 def load_keywords():
     if not KEYWORDS_FILE.exists():
@@ -106,7 +113,7 @@ def search_logs():
 
     with ThreadPoolExecutor() as executor:
         future_to_log = {executor.submit(search_file, log_file, keywords): log_file for log_file in log_files}
-        for future in as_completed(future_to_log):
+        for future in tqdm(as_completed(future_to_log), total=len(log_files), desc="Searching logs", unit="file"):
             log_file_name, matches = future.result()
             logging.info(f"Searching file: {log_file_name}")
             if matches:
@@ -123,6 +130,7 @@ def search_logs():
 
     elapsed = time.time() - start_time
     analytics(len(log_files), total_matches, airline_counter, elapsed)
+    print("Search is Complete!")
 
 if __name__ == "__main__":
     search_logs()
