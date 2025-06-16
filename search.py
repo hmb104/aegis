@@ -124,6 +124,11 @@ def search_logs():
             log_file_name, matches = future.result()
             logging.info(f"Searching file: {log_file_name}")
             if matches:
+                # Handle read errors separately so they don't count as matches
+                if len(matches) == 1 and matches[0][0] == "ERROR":
+                    logging.error(matches[0][1])
+                    continue
+
                 info = parse_log_filename(log_file_name)
                 airline = info["airline"]
                 airline_hits = 0
