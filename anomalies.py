@@ -1,15 +1,22 @@
 import re
+import time
 import pandas as pd
 from tqdm import tqdm
 from pathlib import Path
 from sklearn.ensemble import IsolationForest
 from sklearn.feature_extraction.text import TfidfVectorizer
 
+start_time = time.time()
 CLEAN_LOGS_DIR = Path("cleanlogs")
 RESULTS_DIR = Path(__file__).parent / "results"
 RESULTS_DIR.mkdir(exist_ok=True)
 ANOMALY_OUTPUT = RESULTS_DIR / "anomalies.txt"
-TOP_K = 100  # Number of top anomalies to save (change as needed)
+TOP_K = 100  # Number of top anomalies to save to output file
+
+# Collect all log lines from all *.log files in clearlogs/
+log_lines = []
+file_indices = []
+file_names = []
 
 # Parses file names to extract airlines, flights, and all the way to the LRU
 def parse_log_filename(filename):
@@ -36,11 +43,6 @@ def parse_log_filename(filename):
         "tail": "UNKNOWN",
         "flight": "UNKNOWN"
     }
-
-# Collect all log lines from all .log files
-log_lines = []
-file_indices = []
-file_names = []
 
 log_files = list(CLEAN_LOGS_DIR.glob("*.log"))
 if not log_files:
@@ -90,5 +92,7 @@ with open(ANOMALY_OUTPUT, "w", encoding="utf-8") as out:
         out.write(f"  Line: {line_text}\n")
         out.write("-" * 80 + "\n")
 
+elapsed = time.time() - start_time
 print(f"Anomaly detection complete. Top {len(top_idx)} anomalies written to {ANOMALY_OUTPUT}")
 print(f"Total anomalies flagged: {outliers.sum()} of {len(log_lines)} log lines.")
+print(f"Completed analysis of {len(log_lines)} log lines in {elapsed:.2f} seconds.")
