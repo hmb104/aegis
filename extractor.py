@@ -1,3 +1,6 @@
+# extractor.py
+# Purpose: Extracts logs from .tgz files in rawlogs/ and saves them in cleanlogs/ with detailed logging.
+
 import re
 import sys
 import atexit
@@ -27,6 +30,7 @@ logging.basicConfig(
     ]
 )
 
+# Parses file names to extract airlines, flights, and all the way to the LRU
 def parse_filename(filename: str):
     match = re.match(r"SECURELOGS_(\d{14})_([A-Z0-9]{3})_([A-Z0-9-]+)_([A-Z0-9]+)\.tgz", filename, re.IGNORECASE)
     if match:
@@ -70,6 +74,7 @@ def extract_inner_logs(base_path: Path, dest_dir: Path, timestamp: str, airline:
     if count == 0:
         logging.warning(f"No new inner tgz logs found under {base_path}")
 
+# This is the actual function that extracts the logs from tgz archives
 def extract_tgz_file(tgz_file: Path):
     timestamp, airline, tail, flight = parse_filename(tgz_file.name)
     if not all([timestamp, airline, tail, flight]):

@@ -41,15 +41,17 @@ def load_keywords():
         return [line.strip() for line in f if line.strip() and not line.strip().startswith("#")]
 
 def parse_log_filename(filename):
-    # Supports audit.log_20220330222001_QTR_A7-ANK_QR713.log and similar
+    # Matches: DSU1_audit_20220307232056_SIA_9V-SHJ_SQ999.log
+    # or     : DSU1_audit_20220307232056_SIA_9V-SHJ_SQ999_2.log
     match = re.match(
-        r"([A-Za-z0-9\.]+)_(\d{14})_([A-Z0-9]{3})_([A-Z0-9-]+)_([A-Z0-9]+)\.log",
+        r"([A-Za-z0-9]+)_([A-Za-z0-9\.]+)_(\d{14})_([A-Z0-9]{3})_([A-Z0-9-]+)_([A-Z0-9]+)(?:_\d+)?\.log",
         filename,
         re.IGNORECASE
     )
     if match:
-        logtype, dt, airline, tail, flight = match.groups()
+        system, logtype, dt, airline, tail, flight = match.groups()
         return {
+            "system": system,
             "logtype": logtype,
             "datetime": dt,
             "airline": airline,
@@ -57,6 +59,7 @@ def parse_log_filename(filename):
             "flight": flight
         }
     return {
+        "system": "UNKNOWN",
         "logtype": "UNKNOWN",
         "datetime": "UNKNOWN",
         "airline": "UNKNOWN",
