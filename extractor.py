@@ -1,20 +1,23 @@
 import re
+import sys
+import atexit
+import signal
 import tarfile
 import shutil
 import logging
 from pathlib import Path
 from datetime import datetime
 
-# Setup paths
 RAW_LOGS_DIR = Path("rawlogs")
 CLEAN_LOGS_DIR = Path("cleanlogs")
 TEMP_DIR = Path("tmp")
 
-# Setup log files
+# Ensure output and results folders exist before logging
+CLEAN_LOGS_DIR.mkdir(exist_ok=True)
+Path(__file__).parent.joinpath("results").mkdir(exist_ok=True)
 timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-LOG_FILE = Path(__file__).parent / f"extractor_{timestamp_str}.log"
+LOG_FILE = Path(__file__).parent / "results" / f"extractor_{timestamp_str}.log"
 
-# Setup logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
@@ -33,16 +36,31 @@ def parse_filename(filename: str):
 
 def extract_inner_logs(base_path: Path, dest_dir: Path, timestamp: str, airline: str, tail: str, flight: str):
     count = 0
+    name_counter = {}
     for inner_tgz_file in base_path.rglob("*.tgz"):
         try:
+            system_match = re.search(r'securityLogs_([A-Za-z0-9]+)', inner_tgz_file.name, re.IGNORECASE)
+            if system_match:
+                system_name = system_match.group(1)
+            else:
+                system_name = "UNKNOWN_SYSTEM"
             with tarfile.open(inner_tgz_file, "r:gz") as archive:
                 for member in archive.getmembers():
                     if member.isfile():
                         extracted_file = archive.extractfile(member)
                         if extracted_file:
                             log_type = Path(member.name).stem
-                            unique_name = f"{log_type}_{timestamp}_{airline}_{tail}_{flight}.log"
+                            base_name = f"{system_name}_{log_type}_{timestamp}_{airline}_{tail}_{flight}"
+                            name_counter.setdefault(base_name, 0)
+                            name_counter[base_name] += 1
+                            if name_counter[base_name] > 1:
+                                unique_name = f"{base_name}_{name_counter[base_name]}.log"
+                            else:
+                                unique_name = f"{base_name}.log"
                             output_path = dest_dir / unique_name
+                            if output_path.exists():
+                                logging.info(f"Skipped existing log: {output_path.name}")
+                                continue
                             with open(output_path, "wb") as f:
                                 shutil.copyfileobj(extracted_file, f)
                             logging.info(f"Saved log: {output_path.name}")
@@ -50,24 +68,20 @@ def extract_inner_logs(base_path: Path, dest_dir: Path, timestamp: str, airline:
         except Exception as e:
             logging.warning(f"Failed to extract inner tgz {inner_tgz_file.name}: {e}")
     if count == 0:
-        logging.warning(f"No inner tgz logs found under {base_path}")
+        logging.warning(f"No new inner tgz logs found under {base_path}")
 
 def extract_tgz_file(tgz_file: Path):
     timestamp, airline, tail, flight = parse_filename(tgz_file.name)
     if not all([timestamp, airline, tail, flight]):
         logging.warning(f"Filename format not recognized: {tgz_file.name}")
         return
-
     tmp_path = TEMP_DIR / tgz_file.stem
-
     try:
         if tmp_path.exists():
             shutil.rmtree(tmp_path)
         tmp_path.mkdir(parents=True)
-
         with tarfile.open(tgz_file, "r:gz") as outer:
             outer.extractall(tmp_path)
-
         tar_files = list(tmp_path.rglob("*.tar"))
         if tar_files:
             for tar_file in tar_files:
@@ -78,31 +92,40 @@ def extract_tgz_file(tgz_file: Path):
                 extract_inner_logs(inner_dir, CLEAN_LOGS_DIR, timestamp, airline, tail, flight)
         else:
             extract_inner_logs(tmp_path, CLEAN_LOGS_DIR, timestamp, airline, tail, flight)
-
     except Exception as e:
         logging.warning(f"Failed to process {tgz_file.name}: {e}")
     finally:
         if tmp_path.exists():
             shutil.rmtree(tmp_path, ignore_errors=True)
 
+def cleanup_temp_dir():
+    try:
+        if TEMP_DIR.exists():
+            shutil.rmtree(TEMP_DIR)
+            logging.info(f"Cleaned up temp folder: {TEMP_DIR}")
+    except Exception as cleanup_error:
+        logging.warning(f"Could not clean up temp folder {TEMP_DIR}: {cleanup_error}")
+
+atexit.register(cleanup_temp_dir)
+
+def handle_exit(signum, frame):
+    logging.info("Received exit signal, cleaning up and exiting.")
+    cleanup_temp_dir()
+    sys.exit(0)
+
+signal.signal(signal.SIGINT, handle_exit)
+signal.signal(signal.SIGTERM, handle_exit)
+
 def main():
-    CLEAN_LOGS_DIR.mkdir(exist_ok=True)
-    TEMP_DIR.mkdir(exist_ok=True)
     tgz_files = list(RAW_LOGS_DIR.rglob("*.tgz"))
     if not tgz_files:
         logging.info("No .tgz files found.")
         return
-
     for tgz_file in tgz_files:
         logging.info(f"Processing: {tgz_file.relative_to(RAW_LOGS_DIR)}")
         extract_tgz_file(tgz_file)
-
-    # Final clean-up
-    try:
-        shutil.rmtree(TEMP_DIR)
-        logging.info(f"Fully cleaned up temp folder: {TEMP_DIR}")
-    except Exception as cleanup_error:
-        logging.warning(f"Could not clean up temp folder {TEMP_DIR}: {cleanup_error}")
+    # Final clean-up (optional here, already done by atexit and signal)
+    cleanup_temp_dir()
 
 if __name__ == "__main__":
     main()

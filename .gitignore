@@ -1,5 +1,6 @@
 cleanlogs/
 rawlogs/
+results/
 *.log
 __pycache__/
 *.pyc

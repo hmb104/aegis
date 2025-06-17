@@ -1,3 +1,6 @@
+# search.py
+# Purpose: Perfomed basic search on each .log inside cleanlogs/. for specified keywords (keywords.file) and records detailed match info.
+
 import re
 import time
 import logging
