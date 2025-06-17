@@ -14,9 +14,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 CLEAN_LOGS_DIR = Path("cleanlogs")
 KEYWORDS_FILE = Path("keywords.file")
 
-# Generate timestamped log file
+# Generate timestamped log file in 'results' directory
+Path(__file__).parent.joinpath("results").mkdir(exist_ok=True)
 timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-LOG_FILE = Path(__file__).parent / f"search_{timestamp_str}.log"
+LOG_FILE = Path(__file__).parent / "results" / f"search_{timestamp_str}.log"
 
 logging.basicConfig(
     level=logging.INFO,
