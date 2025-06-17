@@ -95,6 +95,8 @@ with open(ANOMALY_OUTPUT, "w", encoding="utf-8") as out:
         out.write("-" * 80 + "\n")
 
 elapsed = time.time() - start_time
+elapsed_str = time.strftime('%H:%M:%S', time.gmtime(elapsed))
+
 print(f"Anomaly detection complete. Top {len(top_idx)} anomalies written to {ANOMALY_OUTPUT}")
 print(f"Total anomalies flagged: {outliers.sum()} of {len(log_lines)} log lines.")
-print(f"Completed analysis of {len(log_lines)} log lines in {elapsed:.2f} seconds.")
+print(f"Completed analysis of {len(log_lines)} log lines in {elapsed_str} (hh:mm:ss).")
