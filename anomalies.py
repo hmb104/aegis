@@ -3,6 +3,7 @@ import time
 import pandas as pd
 from tqdm import tqdm
 from pathlib import Path
+from datetime import datetime
 from sklearn.ensemble import IsolationForest
 from sklearn.feature_extraction.text import TfidfVectorizer
 
@@ -10,7 +11,8 @@ start_time = time.time()
 CLEAN_LOGS_DIR = Path("cleanlogs")
 RESULTS_DIR = Path(__file__).parent / "results"
 RESULTS_DIR.mkdir(exist_ok=True)
-ANOMALY_OUTPUT = RESULTS_DIR / "anomalies.txt"
+timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+ANOMALY_OUTPUT = RESULTS_DIR / f"anomalies_{timestamp_str}.log"
 TOP_K = 100  # Number of top anomalies to save to output file
 
 # Collect all log lines from all *.log files in clearlogs/
