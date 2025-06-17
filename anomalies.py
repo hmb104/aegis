@@ -9,7 +9,7 @@ CLEAN_LOGS_DIR = Path("cleanlogs")
 RESULTS_DIR = Path(__file__).parent / "results"
 RESULTS_DIR.mkdir(exist_ok=True)
 ANOMALY_OUTPUT = RESULTS_DIR / "anomalies.txt"
-TOP_K = 50  # Number of top anomalies to save (change as needed)
+TOP_K = 100  # Number of top anomalies to save (change as needed)
 
 # Parses file names to extract airlines, flights, and all the way to the LRU
 def parse_log_filename(filename):
